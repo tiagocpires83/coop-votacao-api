@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=Oracle;DB_CLOSE_DELAY=-1
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        physical_naming_strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        dialect: org.hibernate.dialect.OracleDialect
+        default_schema: PUBLIC
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    default-schema: PUBLIC
+
+logging:
+  level:
+    liquibase: INFO
+    org.springframework.boot.autoconfigure.liquibase: INFO
+
+cpf-validation:
+  enabled: false

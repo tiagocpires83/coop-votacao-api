@@ -1,0 +1,61 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.10'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
+}
+
+group = 'br.com'
+version = '0.0.1-SNAPSHOT'
+description = 'API de votação (pautas, sessões e votos)'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	implementation 'org.liquibase:liquibase-core'
+
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
+
+//	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+	compileOnly 'org.projectlombok:lombok:1.18.34'
+	annotationProcessor 'org.projectlombok:lombok:1.18.34'
+	testCompileOnly 'org.projectlombok:lombok:1.18.34'
+	testAnnotationProcessor 'org.projectlombok:lombok:1.18.34'
+
+	runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'com.h2database:h2'
+	testImplementation 'org.mockito:mockito-junit-jupiter'
+	testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+jacoco {
+	toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+}

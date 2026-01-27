@@ -17,19 +17,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ActiveProfiles("test")
-@SpringBootTest
+@SpringBootTest(properties = {
+        "cpf-validation.enabled=false"
+})
 @AutoConfigureMockMvc
-public class VotacaoFlowIT {
+class VotacaoFlowIT {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper mapper;
 
     @Test
     void fluxo_completo_cria_pauta_abre_sessao_vota_resultado() throws Exception {
-        var pautaReq = CreatePautaRequest.builder()
-                .titulo("Pauta 1")
-                .descricao("Descrição da pauta 1")
-                .build();
+        var pautaReq = new CreatePautaRequest("Pauta 1", "Descrição da pauta 1");
 
         var createPautaBody = mvc.perform(post("/api/v1/pautas")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -45,48 +44,44 @@ public class VotacaoFlowIT {
         JsonNode pautaJson = mapper.readTree(createPautaBody);
         long pautaId = pautaJson.get("id").asLong();
 
-        var sessaoReq = OpenSessaoRequest.builder()
-                .duracaoEmMinutos(5)
-                .build();
+        var sessaoReq = new OpenSessaoRequest(5);
 
         mvc.perform(post("/api/v1/pautas/{pautaId}/sessao", pautaId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(sessaoReq)))
                 .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/v1/pautas/" + pautaId + "/sessao"))
                 .andExpect(jsonPath("$.pautaId").value(pautaId))
-                .andExpect(jsonPath("$.inicio").exists())
-                .andExpect(jsonPath("$.fim").exists());
+                .andExpect(jsonPath("$.inicio").isString())
+                .andExpect(jsonPath("$.fim").isString());
 
-        var votoReq = CreateVotoRequest.builder()
-                .associadoId(10L)
-                .cpf("12345678901")
-                .voto(CreateVotoRequest.VotoOpcao.SIM)
-                .build();
+        var votoReq = new CreateVotoRequest("12345678901", CreateVotoRequest.VotoOpcao.SIM);
 
         mvc.perform(post("/api/v1/pautas/{pautaId}/votos", pautaId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(votoReq)))
                 .andExpect(status().isCreated())
+                .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.pautaId").value(pautaId))
-                .andExpect(jsonPath("$.associadoId").value(10))
-                .andExpect(jsonPath("$.voto").value("SIM"));
+                .andExpect(jsonPath("$.cpf").value("12345678901"))
+                .andExpect(jsonPath("$.voto").value("SIM"))
+                .andExpect(jsonPath("$.createdAt").isString());
 
         mvc.perform(get("/api/v1/pautas/{pautaId}/resultado", pautaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pautaId").value(pautaId))
+                .andExpect(jsonPath("$.aberta").value(true))
+                .andExpect(jsonPath("$.inicio").isString())
+                .andExpect(jsonPath("$.fim").isString())
                 .andExpect(jsonPath("$.totalSim").value(1))
                 .andExpect(jsonPath("$.totalNao").value(0))
-                .andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.aberta").value(true));
+                .andExpect(jsonPath("$.total").value(1));
     }
 
     @Test
-    void nao_deve_permitir_voto_duplicado_para_mesmo_associado_na_mesma_pauta() throws Exception {
-        var pautaReq = CreatePautaRequest.builder()
-                .titulo("Pauta Duplicada")
-                .descricao("Desc")
-                .build();
+    void nao_deve_permitir_voto_duplicado_para_mesmo_cpf_na_mesma_pauta() throws Exception {
+        var pautaReq = new CreatePautaRequest("Pauta Duplicada", "Desc");
 
         var createPautaBody = mvc.perform(post("/api/v1/pautas")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,14 +96,10 @@ public class VotacaoFlowIT {
 
         mvc.perform(post("/api/v1/pautas/{pautaId}/sessao", pautaId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(OpenSessaoRequest.builder().duracaoEmMinutos(5).build())))
+                        .content(mapper.writeValueAsString(new OpenSessaoRequest(5))))
                 .andExpect(status().isCreated());
 
-        var votoReq = CreateVotoRequest.builder()
-                .associadoId(10L)
-                .cpf("12345678901")
-                .voto(CreateVotoRequest.VotoOpcao.SIM)
-                .build();
+        var votoReq = new CreateVotoRequest("12345678901", CreateVotoRequest.VotoOpcao.SIM);
 
         mvc.perform(post("/api/v1/pautas/{pautaId}/votos", pautaId)
                         .contentType(MediaType.APPLICATION_JSON)

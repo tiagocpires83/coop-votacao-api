@@ -13,8 +13,8 @@ import java.time.OffsetDateTime;
 @Table(
         name = "VOTO",
         uniqueConstraints = @UniqueConstraint(
-                name = "UQ_VOTO_PAUTA_ASSOCIADO",
-                columnNames = {"PAUTA_ID", "ASSOCIADO_ID"}
+                name = "UQ_VOTO_PAUTA_CPF",
+                columnNames = {"PAUTA_ID", "CPF"}
         )
 )
 public class VotoEntity {
@@ -27,9 +27,6 @@ public class VotoEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "PAUTA_ID", nullable = false, foreignKey = @ForeignKey(name = "FK_VOTO_PAUTA"))
     private PautaEntity pauta;
-
-    @Column(name = "ASSOCIADO_ID", nullable = false)
-    private Long associadoId;
 
     @Column(name = "CPF", nullable = false, length = 20)
     private String cpf;

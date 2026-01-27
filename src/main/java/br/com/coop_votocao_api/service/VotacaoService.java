@@ -11,21 +11,22 @@ import br.com.coop_votocao_api.dto.response.VotoResponse;
 import br.com.coop_votocao_api.entity.PautaEntity;
 import br.com.coop_votocao_api.entity.SessaoVotacaoEntity;
 import br.com.coop_votocao_api.entity.VotoEntity;
-import br.com.coop_votocao_api.exception.BusinessException;
-import br.com.coop_votocao_api.exception.NotFoundException;
 import br.com.coop_votocao_api.repository.PautaRepository;
 import br.com.coop_votocao_api.repository.SessaoVotacaoRepository;
 import br.com.coop_votocao_api.repository.VotoRepository;
+import br.com.coop_votocao_api.rules.PautaRules;
+import br.com.coop_votocao_api.rules.SessaoRules;
+import br.com.coop_votocao_api.rules.VotoRules;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VotacaoService {
@@ -33,13 +34,13 @@ public class VotacaoService {
     private final PautaRepository pautaRepository;
     private final SessaoVotacaoRepository sessaoRepository;
     private final VotoRepository votoRepository;
-    private final CpfValidationClient cpfClient;
 
-    /**
-     * Mantemos um Clock para facilitar testes com tempo controlado.
-     * Em runtime, usa UTC.
-     */
-    private final Clock clock = Clock.systemUTC();
+    private final PautaRules pautaRules;
+    private final SessaoRules sessaoRules;
+    private final VotoRules votoRules;
+
+    private final CpfValidationClient cpfClient;
+    private final Clock clock;
 
     private OffsetDateTime nowUtc() {
         return OffsetDateTime.now(clock.withZone(ZoneOffset.UTC));
@@ -49,48 +50,39 @@ public class VotacaoService {
     public PautaResponse criarPauta(CreatePautaRequest req) {
         OffsetDateTime now = nowUtc();
 
+        log.info("Criando pauta titulo='{}'", req.titulo());
+
         PautaEntity pauta = PautaEntity.builder()
-                .titulo(req.getTitulo())
-                .descricao(req.getDescricao())
+                .titulo(req.titulo())
+                .descricao(req.descricao())
                 .createdAt(now)
                 .build();
 
         PautaEntity saved = pautaRepository.save(pauta);
 
-        return PautaResponse.builder()
-                .id(saved.getId())
-                .titulo(saved.getTitulo())
-                .descricao(saved.getDescricao())
-                .createdAt(saved.getCreatedAt())
-                .build();
+        log.info("Pauta criada id={}", saved.getId());
+
+        return new PautaResponse(saved.getId(), saved.getTitulo(), saved.getDescricao(), saved.getCreatedAt());
     }
 
     @Transactional(readOnly = true)
     public PautaResponse buscarPauta(Long pautaId) {
-        PautaEntity pauta = pautaRepository.findById(pautaId)
-                .orElseThrow(() -> new NotFoundException("Pauta não encontrada"));
+        log.info("Buscando pauta id={}", pautaId);
 
-        return PautaResponse.builder()
-                .id(pauta.getId())
-                .titulo(pauta.getTitulo())
-                .descricao(pauta.getDescricao())
-                .createdAt(pauta.getCreatedAt())
-                .build();
+        PautaEntity pauta = pautaRules.getPautaOrThrow(pautaId);
+
+        return new PautaResponse(pauta.getId(), pauta.getTitulo(), pauta.getDescricao(), pauta.getCreatedAt());
     }
 
     @Transactional
     public SessaoResponse abrirSessao(Long pautaId, OpenSessaoRequest req) {
-        PautaEntity pauta = pautaRepository.findById(pautaId)
-                .orElseThrow(() -> new NotFoundException("Pauta não encontrada"));
+        log.info("Abrindo sessão pautaId={}", pautaId);
 
-        if (sessaoRepository.existsByPauta_Id(pautaId)) {
-            throw new BusinessException("Sessão já foi aberta para esta pauta");
-        }
-
-        int duracao = (req == null || req.getDuracaoEmMinutos() == null) ? 1 : req.getDuracaoEmMinutos();
+        PautaEntity pauta = pautaRules.getPautaOrThrow(pautaId);
+        sessaoRules.assertSessaoNaoExiste(pautaId);
 
         OffsetDateTime inicio = nowUtc();
-        OffsetDateTime fim = inicio.plus(duracao, ChronoUnit.MINUTES);
+        OffsetDateTime fim = sessaoRules.calcularFim(inicio, req);
 
         SessaoVotacaoEntity sessao = SessaoVotacaoEntity.builder()
                 .pauta(pauta)
@@ -100,82 +92,73 @@ public class VotacaoService {
 
         sessaoRepository.save(sessao);
 
-        return SessaoResponse.builder()
-                .pautaId(pautaId)
-                .inicio(inicio)
-                .fim(fim)
-                .build();
+        log.info("Sessão aberta pautaId={} inicio={} fim={}", pautaId, inicio, fim);
+
+        return new SessaoResponse(pautaId, inicio, fim);
     }
 
     @Transactional
     public VotoResponse votar(Long pautaId, CreateVotoRequest req) {
-        PautaEntity pauta = pautaRepository.findById(pautaId)
-                .orElseThrow(() -> new NotFoundException("Pauta não encontrada"));
+        log.info("Votando pautaId={} cpf={}", pautaId, req.cpf());
 
-        SessaoVotacaoEntity sessao = sessaoRepository.findByPauta_Id(pautaId)
-                .orElseThrow(() -> new BusinessException("Sessão não foi aberta para esta pauta"));
+        PautaEntity pauta = pautaRules.getPautaOrThrow(pautaId);
+
+        SessaoVotacaoEntity sessao = sessaoRules.getSessaoOrThrow(pautaId);
 
         OffsetDateTime now = nowUtc();
+        sessaoRules.assertSessaoAberta(sessao, now);
 
-        // Sessão aberta se: now >= inicio e now < fim
-        if (now.isBefore(sessao.getInicio()) || !now.isBefore(sessao.getFim())) {
-            throw new BusinessException("Sessão de votação encerrada");
-        }
+        votoRules.assertNaoVotou(pautaId, req.cpf());
 
-        if (votoRepository.existsByPauta_IdAndAssociadoId(pautaId, req.getAssociadoId())) {
-            throw new BusinessException("Associado já votou nesta pauta");
-        }
+        cpfClient.validate(req.cpf());
 
-        // Validação CPF (opcional / mockável via config no client)
-        cpfClient.validate(req.getCpf());
-
-        VotoEntity.VotoOpcao votoEnum = switch (req.getVoto()) {
-            case SIM -> VotoEntity.VotoOpcao.SIM;
-            case NAO -> VotoEntity.VotoOpcao.NAO;
-        };
+        VotoEntity.VotoOpcao votoEnum = (req.voto() == CreateVotoRequest.VotoOpcao.SIM)
+                ? VotoEntity.VotoOpcao.SIM
+                : VotoEntity.VotoOpcao.NAO;
 
         VotoEntity voto = VotoEntity.builder()
                 .pauta(pauta)
-                .associadoId(req.getAssociadoId())
-                .cpf(req.getCpf())
+                .cpf(req.cpf())
                 .voto(votoEnum)
                 .createdAt(now)
                 .build();
 
         VotoEntity saved = votoRepository.save(voto);
 
-        return VotoResponse.builder()
-                .id(saved.getId())
-                .pautaId(saved.getPauta().getId())
-                .associadoId(saved.getAssociadoId())
-                .voto(saved.getVoto().name())
-                .createdAt(saved.getCreatedAt())
-                .build();
+        log.info("Voto registrado id={} pautaId={} cpf={} voto={}",
+                saved.getId(), pautaId, saved.getCpf(), saved.getVoto());
+
+        return new VotoResponse(
+                saved.getId(),
+                saved.getPauta().getId(),
+                saved.getCpf(),
+                saved.getVoto().name(),
+                saved.getCreatedAt()
+        );
     }
 
     @Transactional(readOnly = true)
     public ResultadoResponse resultado(Long pautaId) {
-        if (!pautaRepository.existsById(pautaId)) {
-            throw new NotFoundException("Pauta não encontrada");
-        }
+        log.info("Resultado pautaId={}", pautaId);
 
-        SessaoVotacaoEntity sessao = sessaoRepository.findByPauta_Id(pautaId)
-                .orElseThrow(() -> new BusinessException("Sessão não foi aberta para esta pauta"));
+        pautaRules.assertExists(pautaId);
+
+        SessaoVotacaoEntity sessao = sessaoRules.getSessaoOrThrow(pautaId);
 
         OffsetDateTime now = nowUtc();
-        boolean aberta = now.isBefore(sessao.getFim());
+        boolean aberta = sessaoRules.isAberta(sessao, now);
 
         long sim = votoRepository.countByPauta_IdAndVoto(pautaId, VotoEntity.VotoOpcao.SIM);
         long nao = votoRepository.countByPauta_IdAndVoto(pautaId, VotoEntity.VotoOpcao.NAO);
 
-        return ResultadoResponse.builder()
-                .pautaId(pautaId)
-                .aberta(aberta)
-                .inicio(sessao.getInicio())
-                .fim(sessao.getFim())
-                .totalSim(sim)
-                .totalNao(nao)
-                .total(sim + nao)
-                .build();
+        return new ResultadoResponse(
+                pautaId,
+                aberta,
+                sessao.getInicio(),
+                sessao.getFim(),
+                sim,
+                nao,
+                sim + nao
+        );
     }
 }

@@ -1,9 +1,8 @@
 package br.com.coop_votocao_api.controller;
 
-
 import br.com.coop_votocao_api.config.TestClockConfig;
-import br.com.coop_votocao_api.dto.request.CreatePautaRequest;
-import br.com.coop_votocao_api.dto.response.PautaResponse;
+import br.com.coop_votocao_api.dto.request.CreateVotoRequest;
+import br.com.coop_votocao_api.dto.response.VotoResponse;
 import br.com.coop_votocao_api.exception.GlobalExceptionHandler;
 import br.com.coop_votocao_api.service.VotacaoService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
-class PautaControllerTest {
+class VotoControllerTest {
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -34,11 +33,10 @@ class PautaControllerTest {
     private VotacaoService service;
 
     @InjectMocks
-    private PautaController controller;
+    private VotoController controller;
 
     @BeforeEach
     void setup() {
-
         Clock clock = new TestClockConfig().clock();
 
         mockMvc = MockMvcBuilders
@@ -48,33 +46,50 @@ class PautaControllerTest {
     }
 
     @Test
-    void criarPauta_deveRetornar201_comLocationEBody() throws Exception {
-        var request = new CreatePautaRequest("Pauta Teste", "Descrição");
+    void votar_deveRetornar201_comLocationEBody() throws Exception {
+        var request = new CreateVotoRequest("12345678901", CreateVotoRequest.VotoOpcao.SIM);
 
-        when(service.criarPauta(request))
-                .thenReturn(new PautaResponse(
+        when(service.votar(1L, request))
+                .thenReturn(new VotoResponse(
+                        100L,
                         1L,
-                        "Pauta Teste",
-                        "Descrição",
+                        "12345678901",
+                        "SIM",
                         OffsetDateTime.parse("2026-01-24T18:00:00Z")
                 ));
 
-        mockMvc.perform(post("/api/v1/pautas")
+        mockMvc.perform(post("/api/v1/pautas/{pautaId}/votos", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "/api/v1/pautas/1"))
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.titulo").value("Pauta Teste"));
+                .andExpect(header().string("Location", "/api/v1/pautas/1/votos/100"))
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.pautaId").value(1))
+                .andExpect(jsonPath("$.cpf").value("12345678901"))
+                .andExpect(jsonPath("$.voto").value("SIM"));
     }
 
     @Test
-    void criarPauta_deveRetornar400_quandoTituloInvalido() throws Exception {
-        var request = new CreatePautaRequest("", "Desc"); // inválido
+    void votar_deveRetornar400_quandoCpfInvalido() throws Exception {
+        // CPF inválido pelo regex (não 11 dígitos, ou vazio)
+        var request = new CreateVotoRequest("123", CreateVotoRequest.VotoOpcao.SIM);
 
-        mockMvc.perform(post("/api/v1/pautas")
+        mockMvc.perform(post("/api/v1/pautas/{pautaId}/votos", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void votar_deveRetornar400_quandoBodyInvalido_semVoto() throws Exception {
+        // JSON sem campo "voto"
+        String json = """
+                {"cpf":"12345678901"}
+                """;
+
+        mockMvc.perform(post("/api/v1/pautas/{pautaId}/votos", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
                 .andExpect(status().isBadRequest());
     }
 }

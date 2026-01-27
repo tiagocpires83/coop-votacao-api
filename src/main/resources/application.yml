@@ -31,3 +31,9 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -5,8 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface VotoRepository extends JpaRepository<VotoEntity, Long> {
 
-    boolean existsByPauta_IdAndAssociadoId(Long pautaId, Long associadoId);
-
+    boolean existsByPauta_IdAndCpf(Long pautaId, String cpf);
     long countByPauta_IdAndVoto(Long pautaId, VotoEntity.VotoOpcao voto);
-
 }

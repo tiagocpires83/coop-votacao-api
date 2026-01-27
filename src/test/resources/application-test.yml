@@ -7,12 +7,16 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     properties:
       hibernate:
         physical_naming_strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
-        dialect: org.hibernate.dialect.OracleDialect
-        default_schema: PUBLIC
+        temp:
+          use_jdbc_metadata_defaults: false
+        hbm2ddl:
+          jdbc_metadata_extraction_strategy: individually
+#        dialect: org.hibernate.dialect.OracleDialect
+#        default_schema: PUBLIC
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml

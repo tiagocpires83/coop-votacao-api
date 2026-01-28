@@ -71,7 +71,6 @@ class VotoControllerTest {
 
     @Test
     void votar_deveRetornar400_quandoCpfInvalido() throws Exception {
-        // CPF inválido pelo regex (não 11 dígitos, ou vazio)
         var request = new CreateVotoRequest("123", CreateVotoRequest.VotoOpcao.SIM);
 
         mockMvc.perform(post("/api/v1/pautas/{pautaId}/votos", 1L)
@@ -82,7 +81,6 @@ class VotoControllerTest {
 
     @Test
     void votar_deveRetornar400_quandoBodyInvalido_semVoto() throws Exception {
-        // JSON sem campo "voto"
         String json = """
                 {"cpf":"12345678901"}
                 """;

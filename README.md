@@ -1,6 +1,6 @@
-# 🗳️ API de Votação – Coop Votação
+🗳️ API de Votação – Coop Votação
 
-API REST desenvolvida em **Java 21 + Spring Boot** para gerenciamento de **pautas**, **sessões de votação**, **registro de votos** e **apuração de resultados**, seguindo boas práticas de arquitetura, REST, testes automatizados e documentação.
+API REST desenvolvida em **Java 21 + Spring Boot 3.x** para gerenciamento de pautas, sessões de votação, registro de votos e apuração de resultados, seguindo boas práticas de arquitetura, REST, testes automatizados e documentação OpenAPI.
 
 ---
 
@@ -8,10 +8,11 @@ API REST desenvolvida em **Java 21 + Spring Boot** para gerenciamento de **pauta
 
 - Criar pautas de votação
 - Abrir sessão de votação (com duração configurável)
-- Registrar votos (`SIM` / `NAO`)
+- Registrar votos (**SIM / NAO**) por CPF
+- Garantia de **voto único por CPF em cada pauta**
 - Validação opcional de CPF (configurável por ambiente)
 - Apuração de resultado da votação
-- Documentação via Swagger (OpenAPI)
+- Documentação via **Swagger (OpenAPI 3)**
 - Testes unitários e de integração com cobertura
 
 ---
@@ -21,118 +22,96 @@ API REST desenvolvida em **Java 21 + Spring Boot** para gerenciamento de **pauta
 - Java 21
 - Spring Boot 3.x
 - Spring Data JPA
-- Liquibase
+- Liquibase (controlado por profile)
 - Oracle Database (produção)
 - H2 (testes)
-- DTOs separados de entidades
-- Regras de negócio na camada Service
+- DTOs imutáveis (records)
 - Controllers enxutos
+- Regras de negócio explícitas na camada Service
 - Exceções mapeadas para HTTP
 - Configuração por profiles
-- Clock injetável para testes
+- Clock injetável para testes determinísticos
 - Jacoco para cobertura de testes
+
+---
+
+## 🔐 Identidade do Votante
+
+- A identidade do votante é baseada **exclusivamente no CPF**
+- Não existe mais conceito de `associadoId`
+- Um mesmo CPF pode votar **apenas uma vez por pauta**
 
 ---
 
 ## 🔐 Validação de CPF
 
-A validação de CPF é desacoplada e controlada por configuração:
-
 ```yaml
 cpf-validation:
-  enabled: true|false
+  enabled: true | false
 ```
 
-- **Local/Testes:** desabilitada
-- **Outros ambientes:** integração com serviço externo
+- Local / Testes: desabilitada
+- Outros ambientes: integração com serviço externo
 
-Isso garante independência de serviços externos durante desenvolvimento e testes.
+---
+
+## 🗄️ Liquibase
+
+- Ativo em ambientes reais
+- Desabilitado em testes (H2) via profile de teste
 
 ---
 
 ## 🚀 Como rodar o projeto
 
-### Subir o banco Oracle (Docker)
-
 ```bash
 docker-compose up -d oracle
-```
-
-### Executar a aplicação
-
-```bash
 ./gradlew bootRun
 ```
-
-Ou execute a classe `CoopVotocaoApiApplication` pela IDE.
 
 ---
 
 ## 🧪 Testes
 
-### Executar testes
-
 ```bash
 ./gradlew test
-```
-
-### Relatório de cobertura
-
-```bash
 ./gradlew jacocoTestReport
 ```
 
-Relatório disponível em:
-
-```
+Relatório:
 build/reports/jacoco/test/html/index.html
-```
 
 ---
 
 ## 📄 Swagger
 
-- Swagger UI  
-  http://localhost:8080/swagger-ui.html
-
-- OpenAPI JSON  
-  http://localhost:8080/v3/api-docs
+- http://localhost:8080/swagger-ui.html
+- http://localhost:8080/v3/api-docs
 
 ---
 
 ## 🔁 Endpoints
 
-| Método | Endpoint |
-|------|---------|
-| POST | /api/v1/pautas |
-| GET | /api/v1/pautas/{id} |
-| POST | /api/v1/pautas/{id}/sessao |
-| POST | /api/v1/pautas/{id}/votos |
-| GET | /api/v1/pautas/{id}/resultado |
+POST /api/v1/pautas  
+GET  /api/v1/pautas/{id}  
+POST /api/v1/pautas/{id}/sessao  
+POST /api/v1/pautas/{id}/votos  
+GET  /api/v1/pautas/{id}/resultado
 
 ---
-
 ## 🛑 Códigos HTTP
 
-| Código | Significado |
-|------|------------|
-| 201 | Criado |
-| 200 | Sucesso |
-| 400 | Dados inválidos |
-| 404 | Não encontrado |
-| 409 | Conflito |
-| 422 | CPF não apto |
-| 502 | Falha em serviço externo |
-
----
-
-## 📦 Tecnologias
-
-Java 21 · Spring Boot · JPA · Liquibase · Oracle · H2 · Lombok · Swagger · JUnit · Mockito · WireMock · Jacoco
-
----
+|  Código | Significado                                                             |
+| ------: | ----------------------------------------------------------------------- |
+| **201** | Recurso criado com sucesso                                              |
+| **200** | Operação realizada com sucesso                                          |
+| **400** | Requisição inválida (erro de validação de payload)                      |
+| **404** | Recurso não encontrado (pauta inexistente)                              |
+| **409** | Conflito de negócio (sessão já aberta, voto duplicado para o mesmo CPF) |
+| **422** | CPF inválido ou não apto para votação                                   |
+| **500** | Erro interno inesperado                                                 |
+| **502** | Falha em serviço externo (validação de CPF)                             |
 
 ## 👨‍💻 Autor
 
-Tiago Pires  
-Backend Engineer
+Tiago Pires – Backend Engineer

@@ -70,7 +70,7 @@ class PautaControllerTest {
 
     @Test
     void criarPauta_deveRetornar400_quandoTituloInvalido() throws Exception {
-        var request = new CreatePautaRequest("", "Desc"); // inválido
+        var request = new CreatePautaRequest("", "Desc");
 
         mockMvc.perform(post("/api/v1/pautas")
                         .contentType(MediaType.APPLICATION_JSON)
